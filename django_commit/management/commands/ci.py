@@ -3,57 +3,59 @@ from django.core.management.base import BaseCommand
 from pip.util import get_installed_distributions
 import os
 import subprocess
-from StringIO import StringIO
-
-
-def confirm(prompt=None, resp=False):
-    """prompts for yes or no response from the user. Returns True for yes and
-    False for no.
-
-    'resp' should be set to the default value assumed by the caller when
-    user simply types ENTER.
-
-    >>> confirm(prompt='Create Directory?', resp=True)
-    Create Directory? [y]|n: 
-    True
-    >>> confirm(prompt='Create Directory?', resp=False)
-    Create Directory? [n]|y: 
-    False
-    >>> confirm(prompt='Create Directory?', resp=False)
-    Create Directory? [n]|y: y
-    True
-
-    """
-    
-    if prompt is None:
-        prompt = 'Confirm'
-
-    if resp:
-        prompt = '%s [%s]|%s: ' % (prompt, 'y', 'n')
-    else:
-        prompt = '%s [%s]|%s: ' % (prompt, 'n', 'y')
-        
-    while True:
-        ans = raw_input(prompt)
-        if not ans:
-            return resp
-        if ans not in ['y', 'Y', 'n', 'N']:
-            print 'please enter y or n.'
-            continue
-        if ans == 'y' or ans == 'Y':
-            return True
-        if ans == 'n' or ans == 'N':
-            return False
 
 
 class Command(BaseCommand):
     help = (
-        'Usage: ci "My message"\n'
-        'Commit all changes made in all editable packages '
+        'Usage: ci "My commit message"\n'
+        'Commit all changes made in all editable packages'
     )
 
+    def confirm(self, prompt=None, resp=False):
+        if prompt is None:
+            prompt = 'Confirm'
+
+        if resp:
+            prompt = '%s [%s]|%s: ' % (prompt, 'y', 'n')
+        else:
+            prompt = '%s [%s]|%s: ' % (prompt, 'n', 'y')
+        
+        while True:
+            ans = raw_input(prompt)
+            if not ans:
+                return resp
+            if ans not in ['y', 'Y', 'n', 'N']:
+                print 'please enter y or n.'
+                continue
+            if ans == 'y' or ans == 'Y':
+                return True
+            if ans == 'n' or ans == 'N':
+                return False
+
+    def confirm_for(self, files):
+        return self.confirm(
+            prompt = (
+                '\nCommit changes to:\n%s\n\n' %
+                ('\n'.join(files))),
+            resp = True
+        )
+
+    def info(self, project_name, message):
+        self.stdout.write(
+            '=== %s\n' % project_name)
+        self.stdout.write(
+            'Using commit message:\n\n')
+        self.stdout.write(message)
+                
     def handle(self, *args, **kwargs):
 
+        if len(args) != 1:
+            self.stderr.write(
+                'Single commit message argument required')
+            self.stderr.write(self.help)
+            return
+            
+        
         message = args[0]
         
         packages = get_installed_distributions(
@@ -66,25 +68,46 @@ class Command(BaseCommand):
             project_name, version, location = (
                 dist.project_name, dist.version, dist.location)
 
-            self.stdout.write(
-                'CI: %s (%s)' % (
-                    project_name,
-                    location
-                ))
+            # test for mercurial
+            if os.path.exists(os.path.join(location, '.hg')):
+                proc = subprocess.Popen(
+                    ['hg','status', '-m'],
+                    stdout=subprocess.PIPE, cwd=location)
+                files = [
+                    l for l in
+                    proc.communicate()[0].split('\n')
+                    if l
+                ]
+                if len(files) > 0:
 
+                    self.info(project_name, message)
+
+                    if self.confirm_for(files):
+                        subprocess.call(
+                            ['hg','commit', '-m', message],
+                            stdout=self.stdout, cwd=location
+                        )
+                        subprocess.call(
+                            ['hg','push'],
+                            stdout=self.stdout, cwd=location
+                        )
+                    self.stdout.write('\n\n\n')
+                
             # test for git
             if os.path.exists(os.path.join(location, '.git')):
                 proc = subprocess.Popen(
                     ['git','ls-files', '-m'],
                     stdout=subprocess.PIPE, cwd=location)
-                lines_val = proc.communicate()[0].split('\n')
-                if len(lines_val) > 0:
-                    if confirm(
-                        prompt = (
-                            'About to commit changes to:\n%s' %
-                            ('\n'.join(lines_val))),
-                        resp = True
-                    ):
+                files = [
+                    l for l in
+                    proc.communicate()[0].split('\n')
+                    if l
+                ]
+                if len(files) > 0:
+
+                    self.info(project_name, message)
+
+                    if self.confirm_for(files):
                         subprocess.call(
                             ['git','commit', '-a', '-m', message],
                             stdout=self.stdout, cwd=location
@@ -93,3 +116,4 @@ class Command(BaseCommand):
                             ['git','push'],
                             stdout=self.stdout, cwd=location
                         )
+                    self.stdout.write('\n\n\n')
