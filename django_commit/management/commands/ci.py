@@ -3,12 +3,23 @@ from django.core.management.base import BaseCommand
 from pip.util import get_installed_distributions
 import os
 import subprocess
+from optparse import make_option
 
 
 class Command(BaseCommand):
     help = (
         'Usage: ci "My commit message"\n'
         'Commit all changes made in all editable packages'
+    )
+
+    option_list = BaseCommand.option_list + (
+        make_option(
+            '--st',
+            action='store_true',
+            dest='status',
+            default=False,
+            help='Just show the status without actual commiting'
+        ),
     )
 
     def confirm(self, prompt=None, resp=False):
@@ -19,7 +30,7 @@ class Command(BaseCommand):
             prompt = '%s [%s]|%s: ' % (prompt, 'y', 'n')
         else:
             prompt = '%s [%s]|%s: ' % (prompt, 'n', 'y')
-        
+
         while True:
             ans = raw_input(prompt)
             if not ans:
@@ -43,21 +54,23 @@ class Command(BaseCommand):
     def info(self, project_name, message):
         self.stdout.write(
             '=== %s\n' % project_name)
-        self.stdout.write(
-            'Using commit message:\n\n')
-        self.stdout.write(message)
-                
+        if message:
+            self.stdout.write(
+                'Using commit message:\n\n')
+            self.stdout.write(message)
+
     def handle(self, *args, **kwargs):
 
-        if len(args) != 1:
+        status_only = kwargs['status']
+
+        if not status_only and len(args) != 1:
             self.stderr.write(
                 'Single commit message argument required')
             self.stderr.write(self.help)
             return
-            
-        
-        message = args[0]
-        
+
+        message = len(args) > 0 and args[0] or ''
+
         packages = get_installed_distributions(
             local_only=True, editables_only=True)
 
@@ -82,7 +95,12 @@ class Command(BaseCommand):
 
                     self.info(project_name, message)
 
-                    if self.confirm_for(files):
+                    if status_only is True:
+                        self.stdout.write(
+                            '\nCommit changes to:\n%s\n\n' %
+                            ('\n'.join(files)))
+
+                    elif self.confirm_for(files):
                         subprocess.call(
                             ['hg','commit', '-m', message],
                             stdout=self.stdout, cwd=location
@@ -92,7 +110,7 @@ class Command(BaseCommand):
                             stdout=self.stdout, cwd=location
                         )
                     self.stdout.write('\n\n\n')
-                
+
             # test for git
             if os.path.exists(os.path.join(location, '.git')):
                 proc = subprocess.Popen(
@@ -107,7 +125,12 @@ class Command(BaseCommand):
 
                     self.info(project_name, message)
 
-                    if self.confirm_for(files):
+                    if status_only is True:
+                        self.stdout.write(
+                            '\nCommit changes to:\n%s\n\n' %
+                            ('\n'.join(files)))
+
+                    elif self.confirm_for(files):
                         subprocess.call(
                             ['git','commit', '-a', '-m', message],
                             stdout=self.stdout, cwd=location
