@@ -1,9 +1,11 @@
+from __future__ import absolute_import
+
 from django.core.management.base import BaseCommand
 
 from pip.util import get_installed_distributions
-import os
-import subprocess
 from optparse import make_option
+
+from ...vcs import VCS
 
 
 class Command(BaseCommand):
@@ -14,6 +16,9 @@ class Command(BaseCommand):
         '       \n'
         '       ./manage.py ci --st [app_name]\n'
         '       Do not commit but show a list of status messages.'
+        '       \n'
+        '       ./manage.py ci --diff [app_name]\n'
+        '       Do not commit but show a diff instead.'
     )
 
     option_list = BaseCommand.option_list + (
@@ -23,6 +28,13 @@ class Command(BaseCommand):
             dest='status',
             default=False,
             help='Just show the status without actual committing'
+        ),
+        make_option(
+            '--diff',
+            action='store_true',
+            dest='diff',
+            default=False,
+            help='Just show the diff without actual committing'
         ),
         make_option(
             '--no-push',
@@ -62,9 +74,9 @@ class Command(BaseCommand):
             resp = True
         )
 
-    def info(self, project_name, message):
+    def info(self, project_name, message, vcs):
         self.stdout.write(
-            '=== %s\n' % project_name)
+            '=== %s %s\n' % (project_name, vcs))
         if message:
             self.stdout.write(
                 'Using commit message:\n\n')
@@ -74,8 +86,9 @@ class Command(BaseCommand):
 
         status_only = kwargs.get('status')
         no_push = kwargs.get('no_push')
+        diff_only = kwargs.get('diff')
 
-        if not status_only and len(args) == 0:
+        if not diff_only and not status_only and len(args) == 0:
             self.stderr.write(
                 'Single commit message argument required')
             self.stderr.write(self.help)
@@ -84,7 +97,7 @@ class Command(BaseCommand):
         message = len(args) > 0 and args[0] or ''
         app_name = len(args) > 1 and args[1] or ''
 
-        if status_only is True:
+        if status_only is True or diff_only is True:
             if message and (not app_name):
                 app_name = message
                 message = 'NO commit is performed.'
@@ -110,74 +123,29 @@ class Command(BaseCommand):
             project_name, version, location = (
                 dist.project_name, dist.version, dist.location)
 
-            # todo: refactor to support version control backends
+            vcs = VCS.create(location, stdout=self.stdout)
 
-            # test for mercurial
-            if os.path.exists(os.path.join(location, '.hg')):
-                proc = subprocess.Popen(
-                    ['hg','status', '-m'],
-                    stdout=subprocess.PIPE, cwd=location)
-                files = [
-                    l for l in
-                    proc.communicate()[0].split('\n')
-                    if l
-                ]
-                if len(files) > 0:
+            if vcs is None:
+                continue
 
-                    self.info(project_name, message)
+            files = vcs.status()
 
-                    if status_only is True:
+            if len(files) > 0:
+                self.info(project_name, message, vcs)
+
+                if diff_only:
+                    vcs.write_diff()
+                elif status_only is True:
+                    self.stdout.write(
+                        '\nCommit changes to:\n%s' %
+                        ('\n'.join(files)))
+                elif self.confirm_for(files):
+                    vcs.commit_changes(message)
+
+                    if not no_push:
+                        vcs.push_to_origin()
+                    else:
                         self.stdout.write(
-                            '\nCommit changes to:\n%s\n\n' %
-                            ('\n'.join(files)))
-
-                    elif self.confirm_for(files):
-                        subprocess.call(
-                            ['hg','commit', '-m', message],
-                            stdout=self.stdout, cwd=location
+                            'Did NOT push.'
                         )
-                        if not no_push:
-                            subprocess.call(
-                                ['hg','push'],
-                                stdout=self.stdout, cwd=location
-                            )
-                        else:
-                            self.stdout.write(
-                                'Did NOT push.'
-                            )
-                    self.stdout.write('\n\n\n')
-
-            # test for git
-            if os.path.exists(os.path.join(location, '.git')):
-                proc = subprocess.Popen(
-                    ['git','ls-files', '-m'],
-                    stdout=subprocess.PIPE, cwd=location)
-                files = [
-                    l for l in
-                    proc.communicate()[0].split('\n')
-                    if l
-                ]
-                if len(files) > 0:
-
-                    self.info(project_name, message)
-
-                    if status_only is True:
-                        self.stdout.write(
-                            '\nCommit changes to:\n%s\n\n' %
-                            ('\n'.join(files)))
-
-                    elif self.confirm_for(files):
-                        subprocess.call(
-                            ['git','commit', '-a', '-m', message],
-                            stdout=self.stdout, cwd=location
-                        )
-                        if not no_push:
-                            subprocess.call(
-                                ['git','push'],
-                                stdout=self.stdout, cwd=location
-                            )
-                        else:
-                            self.stdout.write(
-                                'Did NOT push.'
-                            )
-                    self.stdout.write('\n\n\n')
+                self.stdout.write('\n\n')
