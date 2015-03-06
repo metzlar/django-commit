@@ -8,8 +8,12 @@ from optparse import make_option
 
 class Command(BaseCommand):
     help = (
-        'Usage: ci "My commit message"\n'
-        'Commit all changes made in all editable packages'
+        'Usage: ./manage.py ci [--no-push] "My commit message" [app_name]\n'
+        '       Commit all changes made in [app_name] or all editable packages\n'
+        '       if [app_name] is not set and push (unless --no-push is specified).'
+        '       \n'
+        '       ./manage.py ci --st [app_name]\n'
+        '       Do not commit but show a list of status messages.'
     )
 
     option_list = BaseCommand.option_list + (
@@ -18,7 +22,14 @@ class Command(BaseCommand):
             action='store_true',
             dest='status',
             default=False,
-            help='Just show the status without actual commiting'
+            help='Just show the status without actual committing'
+        ),
+        make_option(
+            '--no-push',
+            action='store_true',
+            dest='no_push',
+            default=False,
+            help='Commit, but do not push.'
         ),
     )
 
@@ -61,15 +72,29 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs):
 
-        status_only = kwargs['status']
+        status_only = kwargs.get('status')
+        no_push = kwargs.get('no_push')
 
-        if not status_only and len(args) != 1:
+        if not status_only and len(args) == 0:
             self.stderr.write(
                 'Single commit message argument required')
             self.stderr.write(self.help)
             return
 
         message = len(args) > 0 and args[0] or ''
+        app_name = len(args) > 1 and args[1] or ''
+
+        if status_only is True:
+            if message and (not app_name):
+                app_name = message
+                message = 'NO commit is performed.'
+
+        if app_name:
+            try:
+                app_module = __import__(app_name)
+                app_name = app_module.__file__
+            except ImportError:
+                app_name = ''
 
         packages = get_installed_distributions(
             local_only=True, editables_only=True)
@@ -78,8 +103,14 @@ class Command(BaseCommand):
             packages, key=lambda dist: dist.project_name.lower())
 
         for dist in packages:
+
+            if app_name and (not app_name.startswith(dist.location)):
+                continue
+
             project_name, version, location = (
                 dist.project_name, dist.version, dist.location)
+
+            # todo: refactor to support version control backends
 
             # test for mercurial
             if os.path.exists(os.path.join(location, '.hg')):
@@ -105,10 +136,15 @@ class Command(BaseCommand):
                             ['hg','commit', '-m', message],
                             stdout=self.stdout, cwd=location
                         )
-                        subprocess.call(
-                            ['hg','push'],
-                            stdout=self.stdout, cwd=location
-                        )
+                        if not no_push:
+                            subprocess.call(
+                                ['hg','push'],
+                                stdout=self.stdout, cwd=location
+                            )
+                        else:
+                            self.stdout.write(
+                                'Did NOT push.'
+                            )
                     self.stdout.write('\n\n\n')
 
             # test for git
@@ -135,8 +171,13 @@ class Command(BaseCommand):
                             ['git','commit', '-a', '-m', message],
                             stdout=self.stdout, cwd=location
                         )
-                        subprocess.call(
-                            ['git','push'],
-                            stdout=self.stdout, cwd=location
-                        )
+                        if not no_push:
+                            subprocess.call(
+                                ['git','push'],
+                                stdout=self.stdout, cwd=location
+                            )
+                        else:
+                            self.stdout.write(
+                                'Did NOT push.'
+                            )
                     self.stdout.write('\n\n\n')
