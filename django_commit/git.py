@@ -33,6 +33,13 @@ class _GITVCS(Base):
             cwd=self.path,
         )
 
+    def pull_n_update(self):
+        subprocess.call(
+            ['git','pull', 'origin', 'master'],
+            stdout=self.stdout,
+            cwd=self.path,
+        )
+
     def push_to_origin(self):
         subprocess.call(
             ['git','push'],

@@ -26,6 +26,13 @@ class _HGVCS(Base):
             cwd=self.path,
         )
 
+    def pull_n_update(self):
+        subprocess.call(
+            ['hg','pull', '-u'],
+            stdout=self.stdout,
+            cwd=self.path,
+        )
+
     def commit_changes(self, message):
         subprocess.call(
             ['hg','commit', '-m', message],

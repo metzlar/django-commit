@@ -32,6 +32,12 @@ class VCS(object):
         '''
         raise NotImplemented('Must implement `commit_changes()`')
 
+    def pull_n_update(self):
+        '''
+        Pull the latest changes from master/default origin branch.
+        '''
+        raise NotImplemented('Must implement `pull_n_update()`')
+
     def push_to_origin(self):
         '''
         Push this repo to its origin

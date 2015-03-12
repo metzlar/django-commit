@@ -5,10 +5,24 @@ from django.core.management.base import BaseCommand
 from pip.util import get_installed_distributions
 from optparse import make_option
 
+from std2.ducktyping import DuckDict
+
 from ...vcs import VCS
 
 
 class Command(BaseCommand):
+
+    colors = DuckDict(
+        HEADER = '\033[95m',
+        OKBLUE = '\033[94m',
+        OKGREEN = '\033[92m',
+        WARNING = '\033[93m',
+        FAIL = '\033[91m',
+        ENDC = '\033[0m',
+        BOLD = '\033[1m',
+        UNDERLINE = '\033[4m',
+    )
+
     help = (
         'Usage: ./manage.py ci [--no-push] "My commit message" [app_name]\n'
         '       Commit all changes made in [app_name] or all editable packages\n'
@@ -50,9 +64,11 @@ class Command(BaseCommand):
             prompt = 'Confirm'
 
         if resp:
-            prompt = '%s [%s]|%s: ' % (prompt, 'y', 'n')
+            prompt = ('%s '+ self.colors.BOLD +'[%s]|%s: ') % (prompt, 'y', 'n')
         else:
-            prompt = '%s [%s]|%s: ' % (prompt, 'n', 'y')
+            prompt = ('%s '+ self.colors.BOLD +'[%s]|%s: ') % (prompt, 'n', 'y')
+
+        prompt += self.colors.ENDC
 
         while True:
             ans = raw_input(prompt)
@@ -76,11 +92,24 @@ class Command(BaseCommand):
 
     def info(self, project_name, message, vcs):
         self.stdout.write(
-            '=== %s %s\n' % (project_name, vcs))
+            self.colors.OKGREEN +
+            '=== %s %s\n' % (project_name, vcs) +
+            self.colors.ENDC
+        )
         if message:
             self.stdout.write(
                 'Using commit message:\n\n')
             self.stdout.write(message)
+
+    @staticmethod
+    def get_dists():
+        packages = get_installed_distributions(
+            local_only=True, editables_only=True)
+
+        packages = sorted(
+            packages, key=lambda dist: dist.project_name.lower())
+
+        return packages
 
     def handle(self, *args, **kwargs):
 
@@ -108,14 +137,11 @@ class Command(BaseCommand):
                 app_name = app_module.__file__
             except ImportError:
                 app_name = ''
+                # all apps in this case app_name is the message
+                # self.stderr.write('App not found %s' % app_name)
+                # return
 
-        packages = get_installed_distributions(
-            local_only=True, editables_only=True)
-
-        packages = sorted(
-            packages, key=lambda dist: dist.project_name.lower())
-
-        for dist in packages:
+        for dist in Command.get_dists():
 
             if app_name and (not app_name.startswith(dist.location)):
                 continue
