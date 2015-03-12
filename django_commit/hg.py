@@ -4,6 +4,8 @@ import subprocess
 
 
 class _HGVCS(Base):
+    ignore_file = '.hgignore'
+
     # todo: use Mercurial python libraries instead of subprocess
 
     def status(self):
@@ -19,27 +21,33 @@ class _HGVCS(Base):
             if l
         ]
 
+    def revert(self, file):
+        subprocess.call(
+            ['hg', 'revert', file],
+            stdout=self.stdout,
+            cwd=self.path,
+        )
+
     def write_diff(self):
         subprocess.call(
-            ['hg','diff'],
+            ['hg', 'diff'],
             stdout=self.stdout,
             cwd=self.path,
         )
 
     def pull_n_update(self):
         subprocess.call(
-            ['hg','pull', '-u'],
+            ['hg', 'pull', '-u'],
             stdout=self.stdout,
             cwd=self.path,
         )
 
     def ignore(self, pattern, add, ignore_file=None):
-        ignore_file = '.hgignore'
-        return super(_HGVCS, self).ignore(pattern, add, ignore_file)
+        return super(_HGVCS, self).ignore(pattern, add, self.ignore_file)
 
     def commit_changes(self, message):
         subprocess.call(
-            ['hg','commit', '-m', message],
+            ['hg', 'commit', '-m', message],
             stdout=self.stdout,
             cwd=self.path,
         )

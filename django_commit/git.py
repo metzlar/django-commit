@@ -5,6 +5,8 @@ import StringIO
 
 
 class _GITVCS(Base):
+    ignore_file = '.gitignore'
+
     def status(self):
         proc = subprocess.Popen(
             #['git','ls-files', '-m'],
@@ -18,6 +20,13 @@ class _GITVCS(Base):
             proc.communicate()[0].split('\n')
             if l
         ]
+
+    def revert(self, file):
+        subprocess.call(
+            ['git', 'checkout', '--', file],
+            stdout=self.stdout,
+            cwd=self.path,
+        )
 
     def write_diff(self):
         subprocess.call(
@@ -34,8 +43,7 @@ class _GITVCS(Base):
         )
 
     def ignore(self, pattern, add, ignore_file=None):
-        ignore_file = '.gitignore'
-        return super(_GITVCS, self).ignore(pattern, add, ignore_file)
+        return super(_GITVCS, self).ignore(pattern, add, self.ignore_file)
 
     def pull_n_update(self):
         subprocess.call(

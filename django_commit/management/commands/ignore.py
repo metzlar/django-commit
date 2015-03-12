@@ -12,7 +12,9 @@ from .ci import Command
 
 class Command(Command):
     help = (
-        'Usage: ./manage.py ignore [--yes] [add|remove] pattern [app_name]'
+        'Usage: ./manage.py ignore [--yes] [add|remove] pattern [app_name]\n'
+        '\n'
+        '       ./manage.py ignore [--yes] --forget [app_name]'
     )
 
     option_list = BaseCommand.option_list + (
@@ -23,15 +25,27 @@ class Command(Command):
             default=False,
             help='Answer Yes to any questions.'
         ),
+        make_option(
+            '--forget',
+            action='store_true',
+            dest='forget',
+            default=False,
+            help='Revert all changes to ignore file(s)'
+        ),
     )
 
     def handle(self, *args, **kwargs):
 
         always_yes = kwargs.get('always_yes')
+        forget = kwargs.get('forget')
 
         operation = len(args) > 0 and args[0] or ''
         pattern = len(args) > 1 and args[1] or ''
         app_name = len(args) > 2 and args[2] or ''
+
+        if forget:
+            if operation:
+                app_name = operation
 
         last_ignore_file = ''
 
@@ -58,7 +72,15 @@ class Command(Command):
 
             self.info(project_name, None, vcs)
 
-            if always_yes or self.confirm(
+            if forget:
+               if always_yes or self.confirm(
+                   prompt='Revert changes to %s ?\n' % vcs.ignore_file,
+                   resp=True
+               ):
+                   vcs.revert(vcs.ignore_file)
+                   self.stdout.write('\n')
+
+            elif always_yes or self.confirm(
                 prompt = '%s %s from ignore file for %s ?\n' % (
                     operation,
                     pattern,
