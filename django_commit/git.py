@@ -33,6 +33,10 @@ class _GITVCS(Base):
             cwd=self.path,
         )
 
+    def ignore(self, pattern, add, ignore_file=None):
+        ignore_file = '.gitignore'
+        return super(_GITVCS, self).ignore(pattern, add, ignore_file)
+
     def pull_n_update(self):
         subprocess.call(
             ['git','pull', 'origin', 'master'],

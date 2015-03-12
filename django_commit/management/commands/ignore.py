@@ -3,6 +3,7 @@ from __future__ import absolute_import
 
 from django.core.management.base import BaseCommand
 
+from pip.util import get_installed_distributions
 from optparse import make_option
 
 from ...vcs import VCS
@@ -11,7 +12,7 @@ from .ci import Command
 
 class Command(Command):
     help = (
-        'Usage: ./manage.py pup [--yes] [app_name]'
+        'Usage: ./manage.py ignore [--yes] [add|remove] pattern [app_name]'
     )
 
     option_list = BaseCommand.option_list + (
@@ -28,7 +29,11 @@ class Command(Command):
 
         always_yes = kwargs.get('always_yes')
 
-        app_name = len(args) > 0 and args[0] or ''
+        operation = len(args) > 0 and args[0] or ''
+        pattern = len(args) > 1 and args[1] or ''
+        app_name = len(args) > 2 and args[2] or ''
+
+        last_ignore_file = ''
 
         if app_name:
             try:
@@ -54,8 +59,14 @@ class Command(Command):
             self.info(project_name, None, vcs)
 
             if always_yes or self.confirm(
-                prompt = 'Pull and update changes for: %s ?\n' % project_name,
+                prompt = '%s %s from ignore file for %s ?\n' % (
+                    operation,
+                    pattern,
+                    project_name,
+                ),
                 resp = True
             ):
-                vcs.pull_n_update()
+                last_ignore_file = '\n'.join(vcs.ignore(pattern, (operation=='add')))
                 self.stdout.write('\n')
+
+        self.stdout.write('Last ignore file contents:\n%s' % last_ignore_file)

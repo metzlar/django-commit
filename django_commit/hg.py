@@ -33,6 +33,10 @@ class _HGVCS(Base):
             cwd=self.path,
         )
 
+    def ignore(self, pattern, add, ignore_file=None):
+        ignore_file = '.hgignore'
+        return super(_HGVCS, self).ignore(pattern, add, ignore_file)
+
     def commit_changes(self, message):
         subprocess.call(
             ['hg','commit', '-m', message],
