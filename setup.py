@@ -7,6 +7,6 @@ setup(
   cmdclass={'upload':lambda x:None},
   install_requires=[
     'django',
-    'pip'
+    'pip>=6'
   ],
 )# pragma: no cover 
