@@ -2,7 +2,12 @@ from __future__ import absolute_import
 
 from django.core.management.base import BaseCommand
 
-from pip.util import get_installed_distributions
+try:
+    from pip.util import get_installed_distributions
+except ImportError:
+    # newer versions of pip
+    from pip import get_installed_distributions
+
 from optparse import make_option
 
 from std2.ducktyping import DuckDict
